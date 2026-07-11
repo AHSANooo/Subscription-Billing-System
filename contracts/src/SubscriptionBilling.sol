@@ -120,7 +120,7 @@ contract SubscriptionBilling is ISubscriptionBilling, Ownable, ReentrancyGuard {
 
     // --- Private Internal Realignment Engines ---
 
-    function _setPlan(uint256 _price, uint32 _period, uint33 _grace) private {
+    function _setPlan(uint256 _price, uint32 _period, uint32 _grace) private {
         if (_price == 0) revert InvalidPlanPrice();
         if (_period == 0) revert InvalidPlanPeriod();
         
