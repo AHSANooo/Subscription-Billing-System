@@ -9,7 +9,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title SubscriptionBilling
- * @dev High-performance recurring billing engine engineered for 6-decimal USDT transactions.
+ * @dev Highly modular, tier-based recurring billing engine for 6-decimal USDT transactions.
  */
 contract SubscriptionBilling is ISubscriptionBilling, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -17,117 +17,111 @@ contract SubscriptionBilling is ISubscriptionBilling, Ownable, ReentrancyGuard {
     // --- State Variables ---
     IERC20 public immutable usdtToken;
     
-    // Storage Slot 1
-    uint256 public planPrice;     // Stored in 6-decimal notation (1 USDT = 1,000,000)
-    
-    // Storage Slot 2: Packed variables (uint32 + uint32 fit cleanly into one 256-bit slot)
-    uint32 public planPeriod;     // Duration in seconds (e.g., 30 days = 2,592,000)
-    uint32 public gracePeriod;    // Duration in seconds (e.g., 3 days = 259,200)
+    // Plan lookup configuration registry
+    mapping(uint256 => Plan) public plans;
 
-    // Storage Slot 3+
-    mapping(address => uint256) public userExpiry;
+    // Nested tracking mapping: User Address => Plan ID => Expiration Timestamp
+    mapping(address => mapping(uint256 => uint256)) public userExpiry;
 
     /**
-     * @dev Sets up the token link and configures initial payment matrices.
+     * @dev Configures the target token for ERC-20 payment transfers.
      */
-    constructor(
-        address _usdtToken,
-        uint256 _initialPrice,
-        uint32 _initialPeriod,
-        uint32 _initialGrace
-    ) Ownable(msg.sender) {
+    constructor(address _usdtToken) Ownable(msg.sender) {
         if (_usdtToken == address(0)) revert ZeroAddress();
         usdtToken = IERC20(_usdtToken);
-        _setPlan(_initialPrice, _initialPeriod, _initialGrace);
     }
 
     // --- External Administrative Routines ---
 
     /**
-     * @dev Updates pricing structures and window intervals dynamically. Guarded against reentrancy.
+     * @dev Configures or modifies a subscription plan tier. Formatted explicitly to pack uint32 structures.
      */
-    function setPlan(uint256 _price, uint32 _period, uint32 _grace) external override onlyOwner nonReentrant {
-        _setPlan(_price, _period, _grace);
+    function setPlan(
+        uint256 _planId, 
+        uint256 _price, 
+        uint32 _period, 
+        uint32 _grace
+    ) external override onlyOwner nonReentrant {
+        if (_price == 0) revert InvalidPlanPrice();
+        if (_period == 0) revert InvalidPlanPeriod();
+        
+        plans[_planId] = Plan({
+            price: _price,
+            period: _period,
+            gracePeriod: _grace,
+            isActive: true
+        });
+
+        emit PlanUpdated(_planId, _price, _period, _grace);
     }
 
     // --- Core User Transactions ---
 
     /**
-     * @dev Process new incoming subscriptions. SafeERC20 guards against irregular token variants.
+     * @dev Processes new incoming subscriptions for a specific plan tier.
      */
-    function subscribe() external override nonReentrant {
-        uint256 price = planPrice;
-        if (price == 0) revert InvalidPlanPrice();
+    function subscribe(uint256 _planId) external override nonReentrant {
+        Plan memory plan = plans[_planId];
+        if (!plan.isActive) revert PlanNotActive();
 
         address subscriber = msg.sender;
-        uint256 currentExpiry = userExpiry[subscriber];
-        uint256 currentTime = block.timestamp; // Cache variable access to save SLOAD gas
+        uint256 currentExpiry = userExpiry[subscriber][_planId];
+        uint256 currentTime = block.timestamp; // Cache timestamp execution state to minimize SLOAD costs
 
-        // Use precise error handling instead of generic unauthorized reverts
-        if (currentExpiry != 0 && currentTime <= currentExpiry + gracePeriod) {
+        if (currentExpiry != 0 && currentTime <= currentExpiry + plan.gracePeriod) {
             revert PlanActive(); 
         }
 
-        uint256 newExpiry = currentTime + planPeriod;
-        userExpiry[subscriber] = newExpiry;
+        uint256 newExpiry = currentTime + plan.period;
+        userExpiry[subscriber][_planId] = newExpiry;
 
-        emit Subscribed(subscriber, newExpiry);
+        emit Subscribed(subscriber, _planId, newExpiry);
 
-        usdtToken.safeTransferFrom(subscriber, address(this), price);
+        usdtToken.safeTransferFrom(subscriber, address(this), plan.price);
     }
 
     /**
-     * @dev Process renewals. Determines mathematical behavior based on current active/expired thresholds.
+     * @dev Renews an active or recently expired subscription for a plan tier.
      */
-    function renew() external override nonReentrant {
-        uint256 price = planPrice;
-        if (price == 0) revert InvalidPlanPrice();
+    function renew(uint256 _planId) external override nonReentrant {
+        Plan memory plan = plans[_planId];
+        if (!plan.isActive) revert PlanNotActive();
 
         address subscriber = msg.sender;
-        uint256 currentExpiry = userExpiry[subscriber];
+        uint256 currentExpiry = userExpiry[subscriber][_planId];
         if (currentExpiry == 0) revert SubscriptionExpired();
 
-        uint256 currentTime = block.timestamp; // Cache variable access
+        uint256 currentTime = block.timestamp; // Cache timestamp access
         uint256 newExpiry;
 
-        // Mathematical rules: Stacks if early/grace, resets if completely dead.
-        if (currentTime <= currentExpiry + gracePeriod) {
-            newExpiry = currentExpiry + planPeriod;
+        // Cumulative chronological tracking rules
+        if (currentTime <= currentExpiry + plan.gracePeriod) {
+            newExpiry = currentExpiry + plan.period;
         } else {
-            newExpiry = currentTime + planPeriod;
+            newExpiry = currentTime + plan.period;
         }
 
-        userExpiry[subscriber] = newExpiry;
-        emit Renewed(subscriber, newExpiry);
+        userExpiry[subscriber][_planId] = newExpiry;
+        emit Renewed(subscriber, _planId, newExpiry);
 
-        usdtToken.safeTransferFrom(subscriber, address(this), price);
+        usdtToken.safeTransferFrom(subscriber, address(this), plan.price);
     }
 
     // --- High-Efficiency Read Paths ---
 
     /**
-     * @dev Dynamic eligibility access gating evaluation. Boundary inclusion evaluation follows strict <= rule.
+     * @dev Evaluates whether a user's subscription access window is open (inclusive of the grace period).
      */
-    function isActive(address user) external view override returns (bool) {
-        uint256 expiry = userExpiry[user];
+    function isUserActive(address user, uint256 _planId) external view override returns (bool) {
+        uint256 expiry = userExpiry[user][_planId];
         if (expiry == 0) return false;
-        return block.timestamp <= expiry + gracePeriod;
+        return block.timestamp <= expiry + plans[_planId].gracePeriod;
     }
 
-    function getExpiry(address user) external view override returns (uint256) {
-        return userExpiry[user];
-    }
-
-    // --- Private Internal Realignment Engines ---
-
-    function _setPlan(uint256 _price, uint32 _period, uint32 _grace) private {
-        if (_price == 0) revert InvalidPlanPrice();
-        if (_period == 0) revert InvalidPlanPeriod();
-        
-        planPrice = _price;
-        planPeriod = _period;
-        gracePeriod = _grace;
-
-        emit PlanUpdated(_price, _period, _grace);
+    /**
+     * @dev Returns the explicit timestamp expiration of a user's subscription tier.
+     */
+    function getExpiry(address user, uint256 _planId) external view override returns (uint256) {
+        return userExpiry[user][_planId];
     }
 }
