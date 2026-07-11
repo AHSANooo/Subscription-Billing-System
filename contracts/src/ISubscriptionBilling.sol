@@ -29,6 +29,7 @@ interface ISubscriptionBilling {
 
     // --- External Functions ---
     function setPlan(uint256 _planId, uint256 _price, uint32 _period, uint32 _grace) external;
+    function togglePlanStatus(uint256 _planId, bool _isActive) external;
     function subscribe(uint256 _planId) external;
     function renew(uint256 _planId) external;
     

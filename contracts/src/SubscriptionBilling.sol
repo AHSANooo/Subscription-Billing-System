@@ -41,7 +41,7 @@ contract SubscriptionBilling is ISubscriptionBilling, Ownable, ReentrancyGuard {
         uint256 _price, 
         uint32 _period, 
         uint32 _grace
-    ) external override onlyOwner nonReentrant {
+    ) external override onlyOwner {
         if (_price == 0) revert InvalidPlanPrice();
         if (_period == 0) revert InvalidPlanPeriod();
         
@@ -53,6 +53,16 @@ contract SubscriptionBilling is ISubscriptionBilling, Ownable, ReentrancyGuard {
         });
 
         emit PlanUpdated(_planId, _price, _period, _grace);
+    }
+
+    /**
+     * @dev Pauses or reactivates a subscription tier without altering its configuration.
+     */
+    function togglePlanStatus(uint256 _planId, bool _isActive) external override onlyOwner {
+        Plan storage plan = plans[_planId];
+        if (plan.price == 0) revert PlanNotActive();
+
+        plan.isActive = _isActive;
     }
 
     // --- Core User Transactions ---

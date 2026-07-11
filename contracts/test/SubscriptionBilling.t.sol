@@ -102,4 +102,38 @@ contract SubscriptionBillingTest is Test {
         assertTrue(billing.isUserActive(subscriber, PLAN_ID));
         vm.stopPrank();
     }
+
+    function test_GraceBoundaryIsInclusiveAtFinalSecond() public {
+        vm.startPrank(subscriber);
+        billing.subscribe(PLAN_ID);
+
+        uint256 baselineExpiry = billing.getExpiry(subscriber, PLAN_ID);
+        vm.warp(baselineExpiry + grace);
+
+        assertTrue(billing.isUserActive(subscriber, PLAN_ID));
+
+        billing.renew(PLAN_ID);
+
+        assertEq(billing.getExpiry(subscriber, PLAN_ID), baselineExpiry + period);
+        vm.stopPrank();
+    }
+
+    function test_TogglePlanStatusPausesAndRestoresTier() public {
+        vm.startPrank(owner);
+        billing.togglePlanStatus(PLAN_ID, false);
+        vm.stopPrank();
+
+        vm.prank(subscriber);
+        vm.expectRevert(ISubscriptionBilling.PlanNotActive.selector);
+        billing.subscribe(PLAN_ID);
+
+        vm.startPrank(owner);
+        billing.togglePlanStatus(PLAN_ID, true);
+        vm.stopPrank();
+
+        vm.prank(subscriber);
+        billing.subscribe(PLAN_ID);
+
+        assertTrue(billing.isUserActive(subscriber, PLAN_ID));
+    }
 }
