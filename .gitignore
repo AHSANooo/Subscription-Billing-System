@@ -1,0 +1,10 @@
+# Foundry artifacts
+contracts/out/
+contracts/cache/
+
+# Node dependencies
+node_modules/
+.env
+
+# System files
+.DS_Store
