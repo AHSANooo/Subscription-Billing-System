@@ -7,21 +7,20 @@ pragma solidity ^0.8.20;
  */
 interface ISubscriptionBilling {
     
-    // --- Custom Errors (Gas-Optimized) ---
-    error DepositAmountZero();
+    // --- Custom Errors (Gas-Optimized & Explicit) ---
     error InvalidPlanPrice();
     error InvalidPlanPeriod();
-    error TransferFailed();
     error SubscriptionExpired();
-    error Unauthorized();
+    error PlanActive();
+    error ZeroAddress();
 
     // --- Events ---
-    event PlanUpdated(uint256 price, uint256 period, uint256 grace);
+    event PlanUpdated(uint256 price, uint32 period, uint32 grace);
     event Subscribed(address indexed user, uint256 expiryTime);
     event Renewed(address indexed user, uint256 newExpiryTime);
 
     // --- External Functions ---
-    function setPlan(uint256 _price, uint256 _period, uint256 _grace) external;
+    function setPlan(uint256 _price, uint32 _period, uint32 _grace) external;
     function subscribe() external;
     function renew() external;
     
