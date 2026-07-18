@@ -252,4 +252,4 @@ After deployment, point the frontend constants at the deployed token and subscri
 
 ## License
 
-The Solidity sources use MIT SPDX identifiers. The repository does not currently include a root LICENSE file.
+This project is licensed under the MIT License. See the root LICENSE file for the full terms.
