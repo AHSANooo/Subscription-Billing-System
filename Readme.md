@@ -227,7 +227,7 @@ After deployment, point the frontend constants at the deployed token and subscri
 4. Rebuild and redeploy the frontend.
 
 ### Live Deployments (Sepolia Testnet)
-
+- **Live Interactive Dashboard**: [subscription-billing-system.vercel.app](https://subscription-billing-system.vercel.app/)
 - Core Billing Engine: `0x6214f6D729d560286389ff741eDcc794Ec5A522c`
 - Mock USDT Token Asset: `0xeCd399Aa572a874AdB04544A65675916FD4e6c75`
 
