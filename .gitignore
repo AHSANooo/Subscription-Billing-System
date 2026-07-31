@@ -8,8 +8,6 @@ contracts/.forge/
 
 # Node dependencies
 node_modules/
-.env
-.env.*
 ! .env.example
 
 # Frontend build output
@@ -122,8 +120,6 @@ web_modules/
 .vercel
 
 # Environment variables
-.env
-.env.*
 !.env.example
 
 # OS generated files
@@ -136,7 +132,6 @@ ehthumbs.db
 Thumbs.db
 
 # Editors
-.vscode/
 .idea/
 *.suo
 *.ntvs*
@@ -153,3 +148,7 @@ Thumbs.db
 *~
 *.old
 *.ini
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
+config.bat
